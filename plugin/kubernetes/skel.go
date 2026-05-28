@@ -6,6 +6,7 @@ import (
 	"encoding/base64"
 	"os"
 	"regexp"
+	"strings"
 
 	log "github.com/sirupsen/logrus"
 	"github.com/tg123/go-htpasswd"
@@ -54,6 +55,23 @@ type skelpipeToPasswordWrapper struct {
 
 type skelpipeToPrivateKeyWrapper struct {
 	skelpipeToWrapper
+}
+
+// isPlusUsernameOverrideEnabled reports whether dynamic username override is enabled by annotations.
+func isPlusUsernameOverrideEnabled(pipe *piperv1beta1.Pipe) bool {
+	anno := pipe.GetAnnotations()
+	return strings.EqualFold(anno["sshpiper.com/to_username_from_plus"], "true") ||
+		strings.EqualFold(anno["to_username_from_plus"], "true")
+}
+
+// parseToUsernameFromPlus extracts the username after '+' when dynamic username override is enabled.
+// If '+' is missing or the right side is empty, caller should keep the default username.
+func parseToUsernameFromPlus(user string) (string, bool) {
+	parts := strings.SplitN(user, "+", 2)
+	if len(parts) != 2 || parts[1] == "" {
+		return "", false
+	}
+	return parts[1], true
 }
 
 func (s *skelpipeWrapper) From() []skel.SkelPipeFrom {
@@ -126,6 +144,12 @@ func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (skel.SkelP
 	}
 
 	if matched {
+		if isPlusUsernameOverrideEnabled(s.pipe) {
+			if plusUsername, ok := parseToUsernameFromPlus(user); ok {
+				targetuser = plusUsername
+			}
+		}
+
 		toWrapper := skelpipeToWrapper{
 			plugin:   s.plugin,
 			pipe:     s.pipe,

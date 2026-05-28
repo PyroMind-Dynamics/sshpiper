@@ -38,6 +38,7 @@ A full sample can be found [here](sample.yaml)
 - `sshpiper.com/kubectl_exec_cmd: "true"` (or `kubectl_exec_cmd`) enables kubectl-exec upstream mode.
 - In kubectl-exec mode, `spec.to.host` is interpreted as `pod`, `pod/container`, or `namespace/pod/container`.
 - `sshpiper.com/kubectl_sshd_cmd` (or `kubectl_sshd_cmd`) overrides the default command (`/bin/sh`).
+- `sshpiper.com/to_username_from_plus: "true"` (or `to_username_from_plus`) enables dynamic upstream username mapping from incoming login names like `prefix+target`: when matched, the part after `+` is used as `spec.to.username`.
 
 > **Note:** When using kubectl-exec mode, the service account used by `sshpiperd` must have RBAC permissions to `get` pods and `create` pod exec sessions, otherwise kubectl exec will fail at runtime. For example:
 >
