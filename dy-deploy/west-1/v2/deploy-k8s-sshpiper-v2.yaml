@@ -1,0 +1,76 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app.kubernetes.io/instance: k8s-sshpiper-v2
+    app.kubernetes.io/name: sshpiper
+  name: k8s-sshpiper-v2
+  namespace: default
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: k8s-sshpiper-v2
+      app.kubernetes.io/name: sshpiper
+  strategy:
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+    type: RollingUpdate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/instance: k8s-sshpiper-v2
+        app.kubernetes.io/name: sshpiper
+    spec:
+      containers:
+      - args:
+        - /sshpiperd/plugins/kubernetes
+        env:
+        - name: SSHPIPERD_SERVER_KEY
+          value: /serverkey/ssh_host_key
+        - name: SSHPIPERD_LOG_LEVEL
+          value: info
+        - name: SSHPIPERD_LOGIN_GRACE_TIME
+          value: 30s
+        - name: SSHPIPERD_KUBERNETES_ALL_NAMESPACES
+          value: "true"
+        - name: ENABLE_TO_USERNAME_FROM_PLUS
+          value: "true"
+        image: docker.io/pyrominddynamics/sshpiper:v0.0.2
+        imagePullPolicy: IfNotPresent
+        name: sshpiper
+        ports:
+        - containerPort: 2222
+          protocol: TCP
+        resources: {}
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          runAsGroup: 65534
+          runAsNonRoot: true
+          runAsUser: 65534
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /serverkey/
+          name: sshpiper-server-key
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccountName: k8s-sshpiper-reader
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - name: sshpiper-server-key
+        secret:
+          defaultMode: 420
+          items:
+          - key: server_key
+            path: ssh_host_key
+          secretName: k8s-sshpiper-server-key

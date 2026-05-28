@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: Service
+metadata:
+  annotations:
+    metallb.universe.tf/allow-shared-ip: shared-ip-group
+  labels:
+    app.kubernetes.io/instance: k8s-sshpiper-v2
+    app.kubernetes.io/name: sshpiper
+  name: k8s-sshpiper-v2
+  namespace: default
+spec:
+  allocateLoadBalancerNodePorts: true
+  externalTrafficPolicy: Cluster
+  internalTrafficPolicy: Cluster
+  ports:
+  - name: sshpiper
+    nodePort: 31316
+    port: 2223
+    protocol: TCP
+    targetPort: 2222
+  selector:
+    app.kubernetes.io/instance: k8s-sshpiper-v2
+    app.kubernetes.io/name: sshpiper
+  sessionAffinity: None
+  type: LoadBalancer
