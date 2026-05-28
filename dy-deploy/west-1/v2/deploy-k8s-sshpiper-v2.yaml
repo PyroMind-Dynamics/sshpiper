@@ -25,6 +25,8 @@ spec:
         app.kubernetes.io/instance: k8s-sshpiper-v2
         app.kubernetes.io/name: sshpiper
     spec:
+      imagePullSecrets:
+      - name: niqi-dev-secret
       containers:
       - args:
         - /sshpiperd/plugins/kubernetes
