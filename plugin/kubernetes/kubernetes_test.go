@@ -160,6 +160,43 @@ func TestMatchConnToUsernameFromPlusAnnotationDisabled(t *testing.T) {
 	}
 }
 
+func TestMatchConnToUsernameFromPlusEnvEnabled(t *testing.T) {
+	t.Setenv(enableToUsernameFromPlusEnv, "true")
+
+	pipe := &piperv1beta1.Pipe{
+		Spec: piperv1beta1.PipeSpec{
+			From: []piperv1beta1.FromSpec{{
+				Username: "jp-f7c5b17a8f58+wangting",
+			}},
+			To: piperv1beta1.ToSpec{
+				Username: "fallback-user",
+				Host:     "example",
+			},
+		},
+	}
+
+	w := &skelpipeFromWrapper{
+		plugin: &plugin{},
+		pipe:   pipe,
+		from:   &pipe.Spec.From[0],
+		to:     &pipe.Spec.To,
+	}
+
+	to, err := w.MatchConn(fakeConn{user: "jp-f7c5b17a8f58+wangting"})
+	if err != nil {
+		t.Fatalf("MatchConn returned error: %v", err)
+	}
+
+	pw, ok := to.(*skelpipeToPasswordWrapper)
+	if !ok {
+		t.Fatalf("expected password wrapper, got %T", to)
+	}
+
+	if pw.username != "wangting" {
+		t.Fatalf("unexpected mapped username: %q", pw.username)
+	}
+}
+
 func TestAuthorizedKeysFromSecretWithAnnotation(t *testing.T) {
 	secret := &corev1.Secret{
 		ObjectMeta: metav1.ObjectMeta{

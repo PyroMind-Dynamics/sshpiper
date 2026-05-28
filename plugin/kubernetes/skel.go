@@ -57,8 +57,15 @@ type skelpipeToPrivateKeyWrapper struct {
 	skelpipeToWrapper
 }
 
-// isPlusUsernameOverrideEnabled reports whether dynamic username override is enabled by annotations.
+const enableToUsernameFromPlusEnv = "ENABLE_TO_USERNAME_FROM_PLUS"
+
+// isPlusUsernameOverrideEnabled reports whether dynamic username override is enabled.
+// Env var ENABLE_TO_USERNAME_FROM_PLUS=true takes precedence, and Pipe annotations are fallback.
 func isPlusUsernameOverrideEnabled(pipe *piperv1beta1.Pipe) bool {
+	if strings.EqualFold(os.Getenv(enableToUsernameFromPlusEnv), "true") {
+		return true
+	}
+
 	anno := pipe.GetAnnotations()
 	return strings.EqualFold(anno["sshpiper.com/to_username_from_plus"], "true") ||
 		strings.EqualFold(anno["to_username_from_plus"], "true")
