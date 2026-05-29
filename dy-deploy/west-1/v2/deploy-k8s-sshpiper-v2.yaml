@@ -41,7 +41,7 @@ spec:
           value: "true"
         - name: ENABLE_TO_USERNAME_FROM_PLUS
           value: "true"
-        image: docker.io/pyrominddynamics/sshpiper:v0.0.2
+        image: docker.io/pyrominddynamics/sshpiper:v0.0.3
         imagePullPolicy: IfNotPresent
         name: sshpiper
         ports:
