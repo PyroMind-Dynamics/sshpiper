@@ -94,7 +94,7 @@ func TestMatchConnToUsernameFromPlusAnnotationEnabled(t *testing.T) {
 		},
 		Spec: piperv1beta1.PipeSpec{
 			From: []piperv1beta1.FromSpec{{
-				Username: "jp-f7c5b17a8f58+wangting",
+				Username: "jp-f7c5b17a8f58",
 			}},
 			To: piperv1beta1.ToSpec{
 				Username: "fallback-user",
@@ -122,6 +122,174 @@ func TestMatchConnToUsernameFromPlusAnnotationEnabled(t *testing.T) {
 
 	if pw.username != "wangting" {
 		t.Fatalf("unexpected mapped username: %q", pw.username)
+	}
+}
+
+func TestMatchConnFromPlusDeviceCodeMatch(t *testing.T) {
+	t.Setenv(enableToUsernameFromPlusEnv, "true")
+
+	pipe := &piperv1beta1.Pipe{
+		Spec: piperv1beta1.PipeSpec{
+			From: []piperv1beta1.FromSpec{{
+				Username: "jp-accb5e3f09b0",
+			}},
+			To: piperv1beta1.ToSpec{
+				Username: "root",
+				Host:     "example",
+			},
+		},
+	}
+
+	w := &skelpipeFromWrapper{
+		plugin: &plugin{},
+		pipe:   pipe,
+		from:   &pipe.Spec.From[0],
+		to:     &pipe.Spec.To,
+	}
+
+	to, err := w.MatchConn(fakeConn{user: "jp-accb5e3f09b0+wangting"})
+	if err != nil {
+		t.Fatalf("MatchConn returned error: %v", err)
+	}
+	if to == nil {
+		t.Fatal("expected match from device code in combined username")
+	}
+
+	pw, ok := to.(*skelpipeToPasswordWrapper)
+	if !ok {
+		t.Fatalf("expected password wrapper, got %T", to)
+	}
+	if pw.username != "wangting" {
+		t.Fatalf("unexpected mapped username: %q", pw.username)
+	}
+}
+
+// UsernameRegexMatch=false, plus override enabled.
+// Case1: from.username contains '+' (misconfiguration). Client logs in as jpxaaa+wangting.
+// fromMatchUser=jpxaaa; matched compares jpxaaa+wangting==jpxaaa -> false; no upstream.
+func TestMatchConnPlusOverride_RegexFalse_FromUsernameContainsPlus_Case1(t *testing.T) {
+	t.Setenv(enableToUsernameFromPlusEnv, "true")
+
+	const (
+		fromUsername = "jpxaaa+wangting"
+		connUser     = "jpxaaa+wangting"
+		toUsername   = "root"
+	)
+
+	pipe := &piperv1beta1.Pipe{
+		Spec: piperv1beta1.PipeSpec{
+			From: []piperv1beta1.FromSpec{{
+				Username:           fromUsername,
+				UsernameRegexMatch: false,
+			}},
+			To: piperv1beta1.ToSpec{
+				Username: toUsername,
+				Host:     "example",
+			},
+		},
+	}
+
+	w := &skelpipeFromWrapper{
+		plugin: &plugin{},
+		pipe:   pipe,
+		from:   &pipe.Spec.From[0],
+		to:     &pipe.Spec.To,
+	}
+
+	fromMatchUser := usernameForFromMatch(pipe, connUser, false)
+	if fromMatchUser != "jpxaaa" {
+		t.Fatalf("fromMatchUser: got %q, want %q", fromMatchUser, "jpxaaa")
+	}
+
+	to, err := w.MatchConn(fakeConn{user: connUser})
+	if err != nil {
+		t.Fatalf("MatchConn returned error: %v", err)
+	}
+	if to != nil {
+		t.Fatalf("expected no match (from.username=%q vs fromMatchUser=%q), got upstream username", fromUsername, fromMatchUser)
+	}
+}
+
+// UsernameRegexMatch=false, plus override enabled.
+// Case2: from.username is device code only. Client logs in as jpxaaaaa+wangting.
+// fromMatchUser=jpxaaaaa; matched=true; upstream targetuser=wangting.
+func TestMatchConnPlusOverride_RegexFalse_FromUsernameDeviceCodeOnly_Case2(t *testing.T) {
+	t.Setenv(enableToUsernameFromPlusEnv, "true")
+
+	const (
+		fromUsername = "jpxaaaaa"
+		connUser     = "jpxaaaaa+wangting"
+		toUsername   = "root"
+	)
+
+	pipe := &piperv1beta1.Pipe{
+		Spec: piperv1beta1.PipeSpec{
+			From: []piperv1beta1.FromSpec{{
+				Username:           fromUsername,
+				UsernameRegexMatch: false,
+			}},
+			To: piperv1beta1.ToSpec{
+				Username: toUsername,
+				Host:     "example",
+			},
+		},
+	}
+
+	w := &skelpipeFromWrapper{
+		plugin: &plugin{},
+		pipe:   pipe,
+		from:   &pipe.Spec.From[0],
+		to:     &pipe.Spec.To,
+	}
+
+	fromMatchUser := usernameForFromMatch(pipe, connUser, false)
+	if fromMatchUser != fromUsername {
+		t.Fatalf("fromMatchUser: got %q, want %q", fromMatchUser, fromUsername)
+	}
+
+	to, err := w.MatchConn(fakeConn{user: connUser})
+	if err != nil {
+		t.Fatalf("MatchConn returned error: %v", err)
+	}
+	if to == nil {
+		t.Fatal("expected match")
+	}
+
+	pw, ok := to.(*skelpipeToPasswordWrapper)
+	if !ok {
+		t.Fatalf("expected password wrapper, got %T", to)
+	}
+	if pw.username != "wangting" {
+		t.Fatalf("upstream targetuser: got %q, want %q", pw.username, "wangting")
+	}
+}
+
+func TestMatchConnFromPlusDeviceCodeNoMatchWhenDisabled(t *testing.T) {
+	pipe := &piperv1beta1.Pipe{
+		Spec: piperv1beta1.PipeSpec{
+			From: []piperv1beta1.FromSpec{{
+				Username: "jp-accb5e3f09b0",
+			}},
+			To: piperv1beta1.ToSpec{
+				Username: "root",
+				Host:     "example",
+			},
+		},
+	}
+
+	w := &skelpipeFromWrapper{
+		plugin: &plugin{},
+		pipe:   pipe,
+		from:   &pipe.Spec.From[0],
+		to:     &pipe.Spec.To,
+	}
+
+	to, err := w.MatchConn(fakeConn{user: "jp-accb5e3f09b0+wangting"})
+	if err != nil {
+		t.Fatalf("MatchConn returned error: %v", err)
+	}
+	if to != nil {
+		t.Fatal("expected no match when plus override disabled and from.username is device code only")
 	}
 }
 
@@ -166,7 +334,7 @@ func TestMatchConnToUsernameFromPlusEnvEnabled(t *testing.T) {
 	pipe := &piperv1beta1.Pipe{
 		Spec: piperv1beta1.PipeSpec{
 			From: []piperv1beta1.FromSpec{{
-				Username: "jp-f7c5b17a8f58+wangting",
+				Username: "jp-f7c5b17a8f58",
 			}},
 			To: piperv1beta1.ToSpec{
 				Username: "fallback-user",

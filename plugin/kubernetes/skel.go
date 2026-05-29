@@ -71,7 +71,33 @@ func isPlusUsernameOverrideEnabled(pipe *piperv1beta1.Pipe) bool {
 		strings.EqualFold(anno["to_username_from_plus"], "true")
 }
 
-// parseToUsernameFromPlus extracts the username after '+' when dynamic username override is enabled.
+
+
+
+
+
+// usernameForFromMatch returns the device code (left of '+') for from matching when override is enabled.
+// Otherwise it returns the full downstream username unchanged.
+func usernameForFromMatch(pipe *piperv1beta1.Pipe, user string, regexmatch bool) string {
+	if !isPlusUsernameOverrideEnabled(pipe) || regexmatch {
+		return user
+	}
+	if deviceCode, ok := parseDeviceCodeFromPlus(user); ok {
+		return deviceCode
+	}
+	return user
+}
+
+// parseDeviceCodeFromPlus extracts the device code before '+' (e.g. jp-accb5e3f09b0 from jp-accb5e3f09b0+wangting).
+func parseDeviceCodeFromPlus(user string) (string, bool) {
+	parts := strings.SplitN(user, "+", 2)
+	if len(parts) != 2 || parts[0] == "" {
+		return "", false
+	}
+	return parts[0], true
+}
+
+// parseToUsernameFromPlus extracts the user code after '+' when dynamic username override is enabled.
 // If '+' is missing or the right side is empty, caller should keep the default username.
 func parseToUsernameFromPlus(user string) (string, bool) {
 	parts := strings.SplitN(user, "+", 2)
@@ -127,14 +153,17 @@ func (s *skelpipeToWrapper) KnownHosts(conn libplugin.ConnMetadata) ([]byte, err
 	return base64.StdEncoding.DecodeString(s.to.KnownHostsData)
 }
 
+
+
 func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (skel.SkelPipeTo, error) {
 	user := conn.User()
+	fromMatchUser := usernameForFromMatch(s.pipe, user, s.from.UsernameRegexMatch)
 
-	matched := s.from.Username == user
+	matched := s.from.Username == fromMatchUser
 	targetuser := s.to.Username
 
 	if targetuser == "" {
-		targetuser = user
+		targetuser = fromMatchUser
 	}
 
 	if s.from.UsernameRegexMatch {
@@ -143,15 +172,15 @@ func (s *skelpipeFromWrapper) MatchConn(conn libplugin.ConnMetadata) (skel.SkelP
 			return nil, err
 		}
 
-		matched = re.MatchString(user)
+		matched = re.MatchString(fromMatchUser)
 
 		if matched {
-			targetuser = re.ReplaceAllString(user, s.to.Username)
+			targetuser = re.ReplaceAllString(fromMatchUser, s.to.Username)
 		}
 	}
 
 	if matched {
-		if isPlusUsernameOverrideEnabled(s.pipe) {
+		if isPlusUsernameOverrideEnabled(s.pipe) && !s.from.UsernameRegexMatch {
 			if plusUsername, ok := parseToUsernameFromPlus(user); ok {
 				targetuser = plusUsername
 			}
